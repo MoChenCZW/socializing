@@ -21,9 +21,11 @@ public class ChatServer {
     private Map<Integer, Writer> map=new ConcurrentHashMap<>();
 
     /**
-     * 创建线程池，线程上限为10个如果
+     * 创建线程池，线程上限为10个，如果第11个客户端请求进来，服务器会接收但是不会去分配线程处理它。
+     * 前10个客户端的聊天记录，它看不见。当有一个客户端下线时，这第11个客户端就会被分配线程，服务器显示在线
+     * 大家可以把10再设置小一点，测试看看
      */
-    private ExecutorService executorService= Executors.newFixedThreadPool(2);
+    private ExecutorService executorService= Executors.newFixedThreadPool(10);
 
     //        客户端连接时往map添加客户端
     public void addClient(Socket socket) throws Exception{
