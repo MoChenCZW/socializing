@@ -1,4 +1,83 @@
 package BIO通信;
 
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 public class ChatServer {
+    private int DEFAULT_PORT=8888;
+    /**
+     *创建一个Map存储在线用户信息。这个map可以统计在线用户、针对这些用户可以转发其他用户发送的消息
+     *因为会有多个线程使用到这个map所以采用ConcurrentHashMap
+     * map中的key是端口号，但是实际情况中一般不会采用端口号作为键值
+    */
+    private Map<Integer, Writer> map=new ConcurrentHashMap<>();
+
+    /**
+     * 创建线程池，线程上限为10个如果
+     */
+    private ExecutorService executorService= Executors.newFixedThreadPool(2);
+
+    //        客户端连接时往map添加客户端
+    public void addClient(Socket socket) throws Exception{
+        if(socket != null){
+            BufferedWriter writer=new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+            map.put(socket.getPort(),writer);
+            System.out.println("Client["+socket.getPort()+"]:Online");
+        }
+    }
+
+    //断开链接时map里移除客户端
+    public void removeClient(Socket socket)throws Exception{
+        if(socket!=null){
+            if(map.containsKey(socket.getPort())){
+                map.get(socket.getPort()).close();
+                map.remove(socket.getPort());
+            }
+            System.out.println("Client["+socket.getPort()+"]:OffLine");
+        }
+    }
+
+    //转发客户端消息，这个方法就是把消息发送给在线的其他的所有客户端
+    public void sendMessage(Socket socket,String msg) throws Exception{
+        //便利在线客户端
+        for(Integer port: map.keySet()){
+            //发送给在线的客户端
+            if(port!=socket.getPort()){
+                Writer writer=map.get(port);
+                writer.write(msg);
+                writer.flush();
+            }
+        }
+    }
+
+    //接收客户端请求，并分发给Handler去请求
+    public void start(){
+        try{
+            ServerSocket serverSocket=new ServerSocket(DEFAULT_PORT);
+            System.out.println("Server Start, The Port is:"+DEFAULT_PORT);
+            while(true){
+                //等待客户端连接
+                Socket socket=serverSocket.accept();
+                //为客户分配一个ChatHandler线程
+                executorService.execute(new ChatHandler(this,socket));
+            }
+        }catch (IOException exception) {
+            exception.printStackTrace();
+        }
+    }
+
+
+    public static void main(String[] args) {
+        ChatServer server=new ChatServer();
+        server.start();
+    }
+
 }
